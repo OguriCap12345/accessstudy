@@ -253,6 +253,52 @@ function getLocationName(locationId) {
   return getLocation(locationId)?.name || locationId;
 }
 
+const KNOWN_STUDENTS = {
+  '26071886@student.hhs.nl': 'Ilker Durmush',
+  'frank@student.hhs.nl': 'Frank De Steen',
+};
+
+function createDisplayName(value) {
+  const trimmedValue = String(value || '').trim();
+  if (!trimmedValue) return 'Student';
+
+  const lowerValue = trimmedValue.toLowerCase();
+
+  if (KNOWN_STUDENTS[lowerValue]) {
+    return KNOWN_STUDENTS[lowerValue];
+  }
+
+  if (!trimmedValue.includes('@')) {
+    return trimmedValue
+      .split(/[._-]/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  const emailName = lowerValue.split('@')[0];
+
+  if (/^\d+$/.test(emailName)) {
+    return 'Student';
+  }
+
+  return emailName
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function getInitials(nameOrEmail) {
+  const displayName = createDisplayName(nameOrEmail);
+  return displayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || 'AS';
+}
+
 function calculateAccessibleRoute(from, to, activeObstacles = [], preferences = {}) {
   const route = predefinedRoutes.find((item) => item.from === from && item.to === to);
 
@@ -338,7 +384,7 @@ function RoutePath({ title, path, type }) {
   );
 }
 
-function AppHeader({ screen, setScreen, highContrast, setHighContrast }) {
+function AppHeader({ screen, setScreen, highContrast, setHighContrast, userName, userEmail }) {
   const showNavigation = !['welcome', 'login', 'register', 'forgot'].includes(screen);
 
   if (!showNavigation) return null;
@@ -362,7 +408,9 @@ function AppHeader({ screen, setScreen, highContrast, setHighContrast }) {
         <button className="icon-button" onClick={() => setHighContrast(!highContrast)} title="Hoog contrast wisselen">
           {highContrast ? '☀️' : '◐'}
         </button>
-        <button className="avatar-button" onClick={() => setScreen('settings')}>FD</button>
+        <button className="avatar-button" onClick={() => setScreen('settings')} title={userEmail || userName}>
+          {getInitials(userName || userEmail)}
+        </button>
       </div>
     </header>
   );
@@ -392,9 +440,17 @@ function BottomNavigation({ screen, setScreen }) {
 
 function App() {
   const [screen, setScreen] = useState('welcome');
-  const [email, setEmail] = useState('frank@student.hhs.nl');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [userName, setUserName] = useState('Student');
+  const [userEmail, setUserEmail] = useState('');
+  const [registerForm, setRegisterForm] = useState({
+    name: '',
+    email: '',
+    education: 'De Haagse Hogeschool',
+    studentNumber: '',
+  });
   const [from, setFrom] = useState('hoofdingang');
   const [to, setTo] = useState('bibliotheek');
   const [routeResult, setRouteResult] = useState(null);
@@ -442,9 +498,21 @@ function App() {
       setLoginError('Controleer je e-mailadres of wachtwoord. Voor de demo mag je elk wachtwoord invullen.');
       return;
     }
+    const displayName = createDisplayName(email);
+    setUserName(displayName);
+    setUserEmail(email.trim());
     setLoginError('');
     setScreen('dashboard');
-    showToast('Welkom terug, Frank. Je campusinformatie is bijgewerkt.');
+    showToast(`Welkom terug, ${displayName}. Je campusinformatie is bijgewerkt.`);
+  }
+
+  function handleRegister(event) {
+    event.preventDefault();
+    const displayName = registerForm.name.trim() || createDisplayName(registerForm.email);
+    setUserName(displayName);
+    setUserEmail(registerForm.email.trim());
+    setScreen('dashboard');
+    showToast(`Account aangemaakt. Welkom bij AccessStudy, ${displayName}.`);
   }
 
   function calculateRoute() {
@@ -460,7 +528,7 @@ function App() {
         id: Date.now(),
         ...newObstacle,
         active: true,
-        reportedBy: 'Frank',
+        reportedBy: userName,
         updatedAt: 'Zojuist',
       },
     ]);
@@ -497,7 +565,14 @@ function App() {
 
   return (
     <div className={highContrast ? 'app high-contrast' : 'app'}>
-      <AppHeader screen={screen} setScreen={setScreen} highContrast={highContrast} setHighContrast={setHighContrast} />
+      <AppHeader
+        screen={screen}
+        setScreen={setScreen}
+        highContrast={highContrast}
+        setHighContrast={setHighContrast}
+        userName={userName}
+        userEmail={userEmail}
+      />
       {toast && <div className="toast" role="status">{toast}</div>}
 
       <main className="app-shell">
@@ -533,7 +608,7 @@ function App() {
               <p className="subtitle">Gebruik je schoolmail of gebruikersnaam. Voor deze demo mag ieder wachtwoord.</p>
               <label>
                 Gebruikersnaam of e-mailadres
-                <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="naam@student.hhs.nl" />
+                <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="bijvoorbeeld 26071886@student.hhs.nl" />
               </label>
               <label>
                 Wachtwoord
@@ -551,22 +626,50 @@ function App() {
 
         {screen === 'register' && (
           <section className="center-page">
-            <div className="card form-card">
-              <button className="back" onClick={() => setScreen('welcome')}>← Terug</button>
+            <form onSubmit={handleRegister} className="card form-card">
+              <button type="button" className="back" onClick={() => setScreen('welcome')}>← Terug</button>
               <span className="pill">Nieuw account</span>
               <h1>Account aanmaken</h1>
               <div className="form-grid two-columns">
-                <label>Naam<input placeholder="Frank de Vries" /></label>
-                <label>E-mailadres<input placeholder="frank@student.hhs.nl" /></label>
+                <label>
+                  Naam
+                  <input
+                    value={registerForm.name}
+                    onChange={(event) => setRegisterForm({ ...registerForm, name: event.target.value })}
+                    placeholder="Jouw naam"
+                  />
+                </label>
+                <label>
+                  E-mailadres
+                  <input
+                    value={registerForm.email}
+                    onChange={(event) => setRegisterForm({ ...registerForm, email: event.target.value })}
+                    placeholder="jouwnaam@student.hhs.nl"
+                  />
+                </label>
                 <label>Wachtwoord<input placeholder="Minimaal 8 tekens" type="password" /></label>
                 <label>Wachtwoord bevestigen<input placeholder="Herhaal wachtwoord" type="password" /></label>
-                <label>Onderwijsinstelling<input placeholder="De Haagse Hogeschool" /></label>
-                <label>Studentnummer<input placeholder="Optioneel" /></label>
+                <label>
+                  Onderwijsinstelling
+                  <input
+                    value={registerForm.education}
+                    onChange={(event) => setRegisterForm({ ...registerForm, education: event.target.value })}
+                    placeholder="De Haagse Hogeschool"
+                  />
+                </label>
+                <label>
+                  Studentnummer
+                  <input
+                    value={registerForm.studentNumber}
+                    onChange={(event) => setRegisterForm({ ...registerForm, studentNumber: event.target.value })}
+                    placeholder="Optioneel"
+                  />
+                </label>
                 <label className="checkbox full-width"><input type="checkbox" /> Ik ga akkoord met de privacyvoorwaarden</label>
-                <button className="full-width" onClick={() => { setScreen('dashboard'); showToast('Account aangemaakt. Welkom bij AccessStudy.'); }}>Account aanmaken</button>
+                <button type="submit" className="full-width">Account aanmaken</button>
               </div>
-              <button className="link-button" onClick={() => setScreen('login')}>Heb je al een account? Log in</button>
-            </div>
+              <button type="button" className="link-button" onClick={() => setScreen('login')}>Heb je al een account? Log in</button>
+            </form>
           </section>
         )}
 
@@ -587,7 +690,7 @@ function App() {
           <section className="dashboard-page">
             <div className="dashboard-hero">
               <div>
-                <span className="pill">Goedemorgen Frank</span>
+                <span className="pill">Goedemorgen {userName}</span>
                 <h1>Waar wil je naartoe?</h1>
                 <p>Je routes, meldingen en ondersteuningsaanvragen staan overzichtelijk op één plek.</p>
                 <div className="hero-actions">
