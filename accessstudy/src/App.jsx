@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
 const campusLocations = [
@@ -254,6 +254,11 @@ function getLocationName(locationId) {
 }
 
 const KNOWN_STUDENTS = {
+  '26049066@student.hhs.nl': 'Lucas Laterveer',
+  '26074788@student.hhs.nl': 'Reshad Shirzai',
+  '26124793@student.hhs.nl': 'Youri Kooter',
+  '25026542@student.hhs.nl': 'Natsumi Suganuma',
+  '25097717@student.hhs.nl': 'Sara Askary',
   '26071886@student.hhs.nl': 'Ilker Durmush',
   'frank@student.hhs.nl': 'Frank De Steen',
 };
@@ -437,7 +442,28 @@ function BottomNavigation({ screen, setScreen }) {
     </nav>
   );
 }
+const STORAGE_KEYS = {
+  obstacles: 'accessstudy_obstacles_v1',
+  requests: 'accessstudy_requests_v1',
+};
 
+function loadFromStorage(key, fallbackValue) {
+  try {
+    const savedValue = localStorage.getItem(key);
+    return savedValue ? JSON.parse(savedValue) : fallbackValue;
+  } catch (error) {
+    console.error(`Kon ${key} niet laden uit localStorage`, error);
+    return fallbackValue;
+  }
+}
+
+function saveToStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Kon ${key} niet opslaan in localStorage`, error);
+  }
+}
 function App() {
   const [screen, setScreen] = useState('welcome');
   const [email, setEmail] = useState('');
@@ -454,9 +480,21 @@ function App() {
   const [from, setFrom] = useState('hoofdingang');
   const [to, setTo] = useState('bibliotheek');
   const [routeResult, setRouteResult] = useState(null);
-  const [obstacles, setObstacles] = useState(defaultObstacles);
-  const [requests, setRequests] = useState(initialRequests);
+  const [obstacles, setObstacles] = useState(() =>
+  loadFromStorage(STORAGE_KEYS.obstacles, defaultObstacles)
+);
+
+const [requests, setRequests] = useState(() =>
+  loadFromStorage(STORAGE_KEYS.requests, initialRequests)
+);
   const [toast, setToast] = useState('');
+  useEffect(() => {
+  saveToStorage(STORAGE_KEYS.obstacles, obstacles);
+}, [obstacles]);
+
+useEffect(() => {
+  saveToStorage(STORAGE_KEYS.requests, requests);
+}, [requests]);
   const [highContrast, setHighContrast] = useState(false);
   const [preferences, setPreferences] = useState({
     avoidStairs: true,
